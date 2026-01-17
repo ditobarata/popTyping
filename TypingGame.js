@@ -134,6 +134,13 @@ class TypingGame extends Phaser.Scene {
 
     startGame() {
         this.isGameRunning = true;
+        
+        // Reset Statistik Pengetikan
+        this.totalKeystrokes = 0;
+        this.correctKeystrokes = 0;
+        this.wrongKeystrokes = 0;
+        this.startTime = Date.now();
+
         // Munculkan 7 kata sekaligus
         for (let i = 0; i < 7; i++) {
             this.spawnWord();
@@ -164,17 +171,37 @@ class TypingGame extends Phaser.Scene {
 
         // Tampilkan UI Game Over dengan background gelap transparan
         let graphics = this.add.graphics();
-        graphics.fillStyle(0x000000, 0.8);
+        graphics.fillStyle(0x000000, 0.9);
         graphics.fillRect(0, 0, 800, 600);
 
-        this.add.text(400, 100, 'TIME UP!', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
-        this.add.text(400, 180, 'Your Score: ' + this.score, { fontSize: '40px', fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        // Hitung Statistik
+        let timeMinutes = (Date.now() - this.startTime) / 60000;
+        if (timeMinutes <= 0) timeMinutes = 0.001; // Mencegah pembagian nol
+
+        let grossWPM = Math.round((this.totalKeystrokes / 5) / timeMinutes);
+        let netWPM = Math.round(((this.totalKeystrokes - this.wrongKeystrokes) / 5) / timeMinutes);
+        if (netWPM < 0) netWPM = 0;
+        let cpm = Math.round(this.totalKeystrokes / timeMinutes);
+        let accuracy = this.totalKeystrokes > 0 ? ((this.correctKeystrokes / this.totalKeystrokes) * 100).toFixed(1) : 0;
+
+        // --- HEADER ---
+        this.add.text(400, 60, 'TIME UP!', { fontSize: '50px', fill: '#ff4444', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(400, 110, 'Final Score: ' + this.score, { fontSize: '36px', fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+
+        // --- STATS BOX ---
+        let statsBg = this.add.graphics();
+        statsBg.fillStyle(0x333333, 0.8);
+        statsBg.fillRoundedRect(150, 140, 500, 80, 10);
+        
+        this.add.text(400, 165, `Gross WPM: ${grossWPM}   |   Net WPM: ${netWPM}`, { fontSize: '20px', fill: '#00ff00' }).setOrigin(0.5);
+        this.add.text(400, 195, `CPM: ${cpm}   |   Accuracy: ${accuracy}%`, { fontSize: '20px', fill: '#00ff00' }).setOrigin(0.5);
         
         // Teks Loading
         let loadingText = this.add.text(400, 350, 'Saving & Loading Leaderboard...', { 
-            fontSize: '28px', 
+            fontSize: '24px', 
             fill: '#ffff00', 
-            align: 'center'
+            align: 'center',
+            fontStyle: 'italic'
         }).setOrigin(0.5);
 
         // Proses Async ke Firebase
@@ -187,16 +214,28 @@ class TypingGame extends Phaser.Scene {
 
         loadingText.destroy();
 
-        let leaderboardStr = "🏆 GLOBAL LEADERBOARD 🏆\n";
+        // --- LEADERBOARD BOX ---
+        let lbBg = this.add.graphics();
+        lbBg.fillStyle(0x222222, 0.9);
+        lbBg.lineStyle(2, 0xffd700); // Gold border
+        lbBg.fillRoundedRect(200, 260, 400, 250, 10);
+        lbBg.strokeRoundedRect(200, 260, 400, 250, 10);
+
+        this.add.text(400, 290, '🏆 GLOBAL LEADERBOARD 🏆', { fontSize: '24px', fill: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5);
+
+        let startY = 330;
         highScores.forEach((data, index) => {
-            leaderboardStr += `${index + 1}. ${data.name}: ${data.score}\n`;
+            let color = index === 0 ? '#ffd700' : '#ffffff'; // Emas untuk juara 1
+            let yPos = startY + (index * 35);
+            
+            // Nama (Align Left di dalam box)
+            this.add.text(230, yPos, `${index + 1}. ${data.name}`, { fontSize: '20px', fill: color }).setOrigin(0, 0.5);
+            
+            // Skor (Align Right di dalam box)
+            this.add.text(570, yPos, `${data.score}`, { fontSize: '20px', fill: color }).setOrigin(1, 0.5);
         });
 
-        this.add.text(400, 350, leaderboardStr, { 
-            fontSize: '28px', fill: '#ffff00', align: 'center', lineSpacing: 10 
-        }).setOrigin(0.5);
-
-        this.add.text(400, 550, 'Click to Restart', { fontSize: '24px', fill: '#ccc' }).setOrigin(0.5);
+        this.add.text(400, 560, 'Click to Restart', { fontSize: '20px', fill: '#888' }).setOrigin(0.5);
         this.input.once('pointerdown', () => this.scene.restart());
     }
 
@@ -262,6 +301,8 @@ class TypingGame extends Phaser.Scene {
         // Pastikan hanya huruf A-Z yang diproses dan mengurangi skor
         if (char.length !== 1 || !/[A-Z]/.test(char)) return;
 
+        this.totalKeystrokes++;
+
         this.sound.play('typing');
         this.score -= 1; // Kurangi 1 skor setiap mengetik huruf
         this.scoreText.setText('Score: ' + this.score);
@@ -272,6 +313,7 @@ class TypingGame extends Phaser.Scene {
         let matches = this.activeWords.filter(cloud => cloud.getWord().startsWith(nextBuffer));
 
         if (matches.length > 0) {
+            this.correctKeystrokes++;
             this.inputBuffer = nextBuffer;
 
             // Update visual: yang cocok jadi biru, yang tidak jadi hitam
@@ -300,6 +342,7 @@ class TypingGame extends Phaser.Scene {
             }
         } else {
             // Salah ketik
+            this.wrongKeystrokes++;
             this.sound.play('wrong');
             this.inputBuffer = "";
             this.activeWords.forEach(w => w.updateProgress("")); // Reset semua ke hitam
