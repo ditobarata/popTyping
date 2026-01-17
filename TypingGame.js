@@ -35,6 +35,12 @@ class TypingGame extends Phaser.Scene {
         this.add.image(400, 300, 'background');
 
         this.words = this.cache.json.get('wordData');
+        
+        // Kategorikan kata untuk distribusi spawn
+        this.redWords = this.words.filter(w => w.length >= 7);
+        this.yellowWords = this.words.filter(w => w.length >= 5 && w.length < 7);
+        this.greenWords = this.words.filter(w => w.length < 5);
+
         this.score = 0;
         this.timeLeft = 60; // Timer 60 detik
         this.activeWords = []; // Array untuk menyimpan banyak kata aktif
@@ -141,10 +147,10 @@ class TypingGame extends Phaser.Scene {
         this.wrongKeystrokes = 0;
         this.startTime = Date.now();
 
-        // Munculkan 7 kata sekaligus
-        for (let i = 0; i < 7; i++) {
-            this.spawnWord();
-        }
+        // Munculkan 9 kata dengan distribusi: 2 Merah, 3 Kuning, 4 Hijau
+        for (let i = 0; i < 2; i++) this.spawnWord('red');
+        for (let i = 0; i < 3; i++) this.spawnWord('yellow');
+        for (let i = 0; i < 4; i++) this.spawnWord('green');
 
         // Timer event loop
         this.timerEvent = this.time.addEvent({
@@ -263,10 +269,28 @@ class TypingGame extends Phaser.Scene {
         }
     }
 
-    spawnWord() {
+    spawnWord(type = null) {
         if (this.timeLeft <= 0) return;
 
-        let randomWord = this.words[Math.floor(Math.random() * this.words.length)];
+        let wordList;
+
+        if (type) {
+            if (type === 'red') wordList = this.redWords;
+            else if (type === 'yellow') wordList = this.yellowWords;
+            else wordList = this.greenWords;
+        } else {
+            // Auto-balance: Cek apa yang kurang dari target (2 Merah, 3 Kuning, 4 Hijau)
+            let redCount = this.activeWords.filter(c => c.getWord().length >= 7).length;
+            let yellowCount = this.activeWords.filter(c => c.getWord().length >= 5 && c.getWord().length < 7).length;
+            
+            if (redCount < 2) wordList = this.redWords;
+            else if (yellowCount < 3) wordList = this.yellowWords;
+            else wordList = this.greenWords;
+        }
+
+        if (!wordList || wordList.length === 0) wordList = this.words;
+
+        let randomWord = wordList[Math.floor(Math.random() * wordList.length)];
         
         let xPos, yPos;
         let validPosition = false;
@@ -279,8 +303,8 @@ class TypingGame extends Phaser.Scene {
             
             validPosition = true;
             for (let word of this.activeWords) {
-                // Kurangi jarak aman agar muat 7 awan (boleh sedikit overlap di pinggir)
-                if (Math.abs(xPos - word.x) < 150 && Math.abs(yPos - word.y) < 110) {
+                // Jarak aman dikurangi agar muat 9 awan
+                if (Math.abs(xPos - word.x) < 130 && Math.abs(yPos - word.y) < 90) {
                     validPosition = false;
                     break;
                 }

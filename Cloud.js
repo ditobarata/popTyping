@@ -45,6 +45,9 @@ class Cloud extends Phaser.GameObjects.Container {
             alpha: 1,
             duration: 500
         });
+
+        // Mulai gerakan mengambang (floating)
+        this.startFloating();
     }
 
     getWord() {
@@ -70,6 +73,32 @@ class Cloud extends Phaser.GameObjects.Container {
         
         this.leftText.x = startX;
         this.rightText.x = startX + w1;
+    }
+
+    startFloating() {
+        this.initialX = this.x;
+        this.initialY = this.y;
+        this.moveRandomly();
+    }
+
+    moveRandomly() {
+        if (!this.scene) return; // Cek jika objek sudah dihancurkan
+
+        // Gerakan random lambat di sekitar posisi awal
+        const targetX = this.initialX + Phaser.Math.Between(-30, 30);
+        const targetY = this.initialY + Phaser.Math.Between(-20, 20);
+        const duration = Phaser.Math.Between(10000, 15000); // 10-15 detik
+
+        this.scene.tweens.add({
+            targets: this,
+            x: targetX,
+            y: targetY,
+            duration: duration,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+                if (this.scene) this.moveRandomly();
+            }
+        });
     }
 
     explode() {
