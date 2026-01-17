@@ -5,27 +5,33 @@ class Cloud extends Phaser.GameObjects.Container {
         this.fullWord = word; // Simpan kata penuh
         
         // Setup Visual Awan dan Teks
-        let cloudImage = scene.add.image(0, 0, 'cloud').setAlpha(0.8);
+        // Pilih tekstur berdasarkan panjang kata
+        let textureKey;
+        let cloudScale;
 
-        // Warnai awan berdasarkan panjang kata
         if (word.length >= 7) {
-            cloudImage.setTint(0xffaaaa); // Merah muda (>= 7 huruf)
+            textureKey = 'cloud_red';
+            cloudScale = 1.15; // Lebih besar untuk kata panjang
         } else if (word.length >= 5) {
-            cloudImage.setTint(0xffffaa); // Kuning muda (5-6 huruf)
+            textureKey = 'cloud_yellow';
+            cloudScale = 1.0; // Ukuran normal
         } else {
-            cloudImage.setTint(0xaaffaa); // Hijau muda (2-4 huruf)
+            textureKey = 'cloud_green';
+            cloudScale = 0.85; // Lebih kecil untuk kata pendek
         }
+
+        let bodyImage = scene.add.image(0, 0, textureKey).setAlpha(0.9).setScale(cloudScale);
         
-        const styleBlack = { fontSize: '30px', fill: '#000', fontWeight: 'bold' };
-        const styleBlue = { fontSize: '30px', fill: '#0000ff', fontWeight: 'bold' };
+        const styleBlack = { fontSize: '20px', fill: '#000', fontWeight: 'bold' };
+        const styleBlue = { fontSize: '20px', fill: '#0000ff', fontWeight: 'bold' };
 
         // Text bagian kiri (sudah diketik - Biru)
-        this.leftText = scene.add.text(0, 0, "", styleBlue).setOrigin(0, 0.5);
+        this.leftText = scene.add.text(0, 20, "", styleBlue).setOrigin(0, 0.5);
         
         // Text bagian kanan (belum diketik - Hitam)
-        this.rightText = scene.add.text(0, 0, word, styleBlack).setOrigin(0, 0.5);
+        this.rightText = scene.add.text(0, 20, word, styleBlack).setOrigin(0, 0.5);
 
-        this.add([cloudImage, this.leftText, this.rightText]);
+        this.add([bodyImage, this.leftText, this.rightText]);
         this.updateLayout(); // Atur posisi awal
 
         this.setAlpha(0);
@@ -96,27 +102,52 @@ class Cloud extends Phaser.GameObjects.Container {
     }
 
     static createTextures(scene) {
-        // Buat tekstur awan secara programatis
-        let graphics = scene.make.graphics({ x: 0, y: 0, add: false });
-        
-        // 1. Lapisan Bayangan (Abu-abu)
-        graphics.fillStyle(0xcccccc, 1); 
-        graphics.fillCircle(55, 70, 40);
-        graphics.fillCircle(95, 65, 50);
-        graphics.fillCircle(135, 70, 40);
-        graphics.fillCircle(75, 45, 35);
-        graphics.fillCircle(115, 45, 35);
+        // Definisi bentuk-bentuk dasar awan (Ellipses untuk dasar, Circles untuk gumpalan)
+        const ellipses = [
+            { x: 100, y: 110, w: 90, h: 30 },
+            { x: 60, y: 110, w: 90, h: 30 },
+            { x: 130, y: 110, w: 90, h: 30 }
+        ];
 
-        // 2. Lapisan Utama (Putih)
-        graphics.fillStyle(0xffffff, 1); 
-        graphics.fillCircle(50, 65, 40);
-        graphics.fillCircle(90, 60, 50);
-        graphics.fillCircle(130, 65, 40);
-        graphics.fillCircle(70, 40, 35);
-        graphics.fillCircle(110, 40, 35);
-        graphics.generateTexture('cloud', 200, 140);
+        const circles = [
+            { x: 50, y: 95, r: 25 },
+            { x: 85, y: 75, r: 25 },
+            { x: 105, y: 95, r: 25 },
+            { x: 125, y: 85, r: 25 },
+            { x: 145, y: 95, r: 15 }
+        ];
 
-        // Buat tekstur partikel pecahan (puff)
+        // Definisi variasi warna shading
+        const variants = [
+            { key: 'cloud_green', color: 0xdef2de },   // < 5 huruf (Hijau Abu) #def2deff
+            { key: 'cloud_yellow', color: 0xf4f4cc },  // 5-6 huruf (Kuning Abu) #f4f4ccff
+            { key: 'cloud_red', color: 0xf7d6d6 }      // >= 7 huruf (Merah Abu) #f7d6d6ff
+        ];
+
+        // Generate 3 tekstur berbeda (Hijau, Kuning, Merah)
+        variants.forEach(variant => {
+            let bodyGraphics = scene.make.graphics({ x: 0, y: 0, add: false });
+            const bY = 2; // Offset shading internal
+            
+            // A. Lapisan Dasar (Putih)
+            bodyGraphics.fillStyle(0xffffff, 1);
+            ellipses.forEach(e => bodyGraphics.fillEllipse(e.x, e.y, e.w, e.h));
+
+            // B. Gumpalan dengan Shading Internal
+            circles.forEach(c => {
+                // Shading internal (Warna sesuai varian)
+                bodyGraphics.fillStyle(variant.color, 1);
+                bodyGraphics.fillCircle(c.x - bY, c.y - bY, c.r);
+                
+                // Bagian utama (Putih)
+                bodyGraphics.fillStyle(0xffffff, 1);
+                bodyGraphics.fillCircle(c.x, c.y, c.r);
+            });
+
+            bodyGraphics.generateTexture(variant.key, 200, 160);
+        });
+
+        // 3. TEKSTUR PUFF
         let puffGraphics = scene.make.graphics({ x: 0, y: 0, add: false });
         puffGraphics.fillStyle(0xffffff, 1);
         puffGraphics.fillCircle(15, 15, 15);

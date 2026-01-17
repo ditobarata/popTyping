@@ -287,8 +287,6 @@ class TypingGame extends Phaser.Scene {
             }
             attempts++;
         }
-
-        // Hapus "return" agar awan tetap muncul walau posisi agak bertumpuk
         
         // Gunakan Class Cloud yang baru
         let newCloud = new Cloud(this, xPos, yPos, randomWord);
