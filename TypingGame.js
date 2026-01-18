@@ -47,6 +47,7 @@ class TypingGame extends Phaser.Scene {
         this.inputBuffer = ""; // Menyimpan apa yang sedang diketik
         this.isGameRunning = false; // Status game belum mulai
         this.playerName = "";
+        this.gameMode = 'time'; // Default mode: 'time' atau 'survival'
 
         // Panggil fungsi static dari Cloud.js untuk membuat tekstur
         Cloud.createTextures(this);
@@ -80,6 +81,20 @@ class TypingGame extends Phaser.Scene {
         this.nameDisplay = this.add.text(400, 300, '_', { fontSize: '60px', fill: '#00ff00', fontStyle: 'bold' }).setOrigin(0.5);
         this.nameInstruction = this.add.text(400, 450, 'Tekan ENTER untuk Mulai', { fontSize: '20px', fill: '#ccc' }).setOrigin(0.5);
 
+        // Tombol Ganti Mode
+        this.modeSwitchText = this.add.text(400, 380, 'Mode: Time Attack (60s) [Klik Ganti]', { fontSize: '24px', fill: '#00ffff', fontStyle: 'bold' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        this.modeSwitchText.on('pointerdown', () => {
+            if (this.gameMode === 'time') {
+                this.gameMode = 'survival';
+                this.modeSwitchText.setText('Mode: Survival (Max 30 Errors) [Klik Ganti]');
+                this.timeText.setText('Lives: 30');
+            } else {
+                this.gameMode = 'time';
+                this.modeSwitchText.setText('Mode: Time Attack (60s) [Klik Ganti]');
+                this.timeText.setText('Time: 60');
+            }
+        });
+
         this.input.keyboard.on('keydown', this.handleNameInput, this);
     }
 
@@ -100,12 +115,13 @@ class TypingGame extends Phaser.Scene {
         this.namePrompt.destroy();
         this.nameDisplay.destroy();
         this.nameInstruction.destroy();
+        this.modeSwitchText.destroy();
 
         this.playerNameText.setText('Player: ' + this.playerName);
         this.startCountdown();
 
         this.input.keyboard.on('keydown', (event) => {
-            if (this.isGameRunning && this.timeLeft > 0) {
+            if (this.isGameRunning) {
                 this.handleInput(event);
             }
         });
@@ -152,18 +168,24 @@ class TypingGame extends Phaser.Scene {
         for (let i = 0; i < 3; i++) this.spawnWord('yellow');
         for (let i = 0; i < 4; i++) this.spawnWord('green');
 
-        // Timer event loop
-        this.timerEvent = this.time.addEvent({
-            delay: 1000,
-            callback: () => {
-                this.timeLeft--;
-                this.timeText.setText('Time: ' + this.timeLeft);
-                if (this.timeLeft <= 0) {
-                    this.endGame();
-                }
-            },
-            loop: true
-        });
+        if (this.gameMode === 'time') {
+            this.timeLeft = 60;
+            this.timeText.setText('Time: ' + this.timeLeft);
+            // Timer event loop
+            this.timerEvent = this.time.addEvent({
+                delay: 1000,
+                callback: () => {
+                    this.timeLeft--;
+                    this.timeText.setText('Time: ' + this.timeLeft);
+                    if (this.timeLeft <= 0) {
+                        this.endGame();
+                    }
+                },
+                loop: true
+            });
+        } else {
+            this.timeText.setText('Lives: 30');
+        }
     }
 
     update() {
@@ -171,7 +193,8 @@ class TypingGame extends Phaser.Scene {
     }
 
     endGame() {
-        this.timerEvent.remove();
+        this.isGameRunning = false;
+        if (this.timerEvent) this.timerEvent.remove();
         this.activeWords.forEach(word => word.destroy());
         this.activeWords = [];
 
@@ -190,8 +213,10 @@ class TypingGame extends Phaser.Scene {
         let cpm = Math.round(this.totalKeystrokes / timeMinutes);
         let accuracy = this.totalKeystrokes > 0 ? ((this.correctKeystrokes / this.totalKeystrokes) * 100).toFixed(1) : 0;
 
+        let titleText = (this.gameMode === 'survival' && this.wrongKeystrokes >= 30) ? 'GAME OVER!' : 'TIME UP!';
+
         // --- HEADER ---
-        this.add.text(400, 60, 'TIME UP!', { fontSize: '50px', fill: '#ff4444', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(400, 60, titleText, { fontSize: '50px', fill: '#ff4444', fontStyle: 'bold' }).setOrigin(0.5);
         this.add.text(400, 110, 'Final Score: ' + this.score, { fontSize: '36px', fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
 
         // --- STATS BOX ---
@@ -227,7 +252,8 @@ class TypingGame extends Phaser.Scene {
         lbBg.fillRoundedRect(200, 260, 400, 250, 10);
         lbBg.strokeRoundedRect(200, 260, 400, 250, 10);
 
-        this.add.text(400, 290, '🏆 GLOBAL LEADERBOARD 🏆', { fontSize: '24px', fill: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5);
+        let lbTitle = this.gameMode === 'survival' ? '🏆 SURVIVAL LEADERBOARD 🏆' : '🏆 TIME ATTACK LEADERBOARD 🏆';
+        this.add.text(400, 290, lbTitle, { fontSize: '24px', fill: '#ffd700', fontStyle: 'bold' }).setOrigin(0.5);
 
         let startY = 330;
         highScores.forEach((data, index) => {
@@ -247,7 +273,8 @@ class TypingGame extends Phaser.Scene {
 
     async getHighScores() {
         try {
-            const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(5));
+            const collectionName = this.gameMode === 'survival' ? 'leaderboard_survival' : 'leaderboard_time';
+            const q = query(collection(db, collectionName), orderBy("score", "desc"), limit(5));
             const querySnapshot = await getDocs(q);
             let scores = [];
             querySnapshot.forEach((doc) => scores.push(doc.data()));
@@ -260,7 +287,8 @@ class TypingGame extends Phaser.Scene {
 
     async saveHighScore() {
         try {
-            await addDoc(collection(db, "leaderboard"), {
+            const collectionName = this.gameMode === 'survival' ? 'leaderboard_survival' : 'leaderboard_time';
+            await addDoc(collection(db, collectionName), {
                 name: this.playerName,
                 score: this.score
             });
@@ -270,7 +298,7 @@ class TypingGame extends Phaser.Scene {
     }
 
     spawnWord(type = null) {
-        if (this.timeLeft <= 0) return;
+        if (!this.isGameRunning) return;
 
         let wordList;
 
@@ -367,6 +395,16 @@ class TypingGame extends Phaser.Scene {
             this.wrongKeystrokes++;
             this.sound.play('wrong');
             this.inputBuffer = "";
+            
+            if (this.gameMode === 'survival') {
+                let lives = 30 - this.wrongKeystrokes;
+                this.timeText.setText('Lives: ' + lives);
+                if (lives <= 0) {
+                    this.endGame();
+                    return;
+                }
+            }
+            
             this.activeWords.forEach(w => w.updateProgress("")); // Reset semua ke hitam
         }
     }
